@@ -5,6 +5,7 @@ LOG_NAME="free5gc.log"
 TODAY=$(date +"%Y%m%d_%H%M%S")
 PCAP_MODE=0
 N3IWF_ENABLE=0
+WAGF_ENABLE=0
 
 PID_LIST=()
 echo $$ > run.pid
@@ -32,6 +33,9 @@ if [ $# -ne 0 ]; then
             -n3iwf)
                 N3IWF_ENABLE=1
                 ;;
+            -wagf)
+                WAGF_ENABLE=1
+                ;;
         esac
         shift
     done
@@ -42,7 +46,7 @@ function terminate()
     rm run.pid
     sudo rm -f /tmp/config.json # CHF ChargingGatway FTP config
     echo "Receive SIGINT, terminating..."
-    if [ $N3IWF_ENABLE -ne 0 ]; then
+    if [ $N3IWF_ENABLE -ne 0 ] || [ $WAGF_ENABLE -ne 0 ]; then
         sudo ip xfrm state > ${LOG_PATH}NWu_SA_state.log
         sudo ip xfrm state flush
         sudo ip xfrm policy flush
@@ -113,7 +117,7 @@ mongo --eval "db.NfProfile.drop();db.applicationData.influenceData.subsToNotify.
 mongosh --eval "db.NfProfile.drop();db.applicationData.influenceData.subsToNotify.drop();db.applicationData.subsToNotify.drop();db.policyData.subsToNotify.drop();db.exposureData.subsToNotify.drop()" free5gc
 sleep 0.1
 
-NF_LIST="nrf amf smf udr pcf udm nssf ausf chf"
+NF_LIST="nrf amf smf udr pcf udm nssf ausf chf wagf"
 
 export GIN_MODE=release
 
@@ -130,6 +134,15 @@ if [ $N3IWF_ENABLE -ne 0 ]; then
     N3IWF_PID=$(pgrep -P $SUDO_N3IWF_PID)
     PID_LIST+=($SUDO_N3IWF_PID $N3IWF_PID)
 fi
+
+if [ $WAGF_ENABLE -ne 0 ]; then
+    sudo ./bin/wagf -c ./config/wagfcfg.yaml -l ${LOG_PATH}wagf.log -lc ${LOG_PATH}${LOG_NAME} &
+    SUDO_WAGF_PID=$!
+    sleep 1
+    WAGF_PID=$(pgrep -P $SUDO_WAGF_PID)
+    PID_LIST+=($SUDO_WAGF_PID $WAGF_PID)
+fi
+
 
 wait ${PID_LIST}
 exit 0
